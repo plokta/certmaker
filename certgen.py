@@ -1,13 +1,20 @@
 #! /usr/bin/env python3
 
-import argparse, os, hashlib, sys, time, itertools
+import argparse
+import hashlib
+import itertools
+import os
+import sys
+import time
 from uuid import uuid4
+
 from OpenSSL import crypto
+
 
 class CertMaker:
 
     def __init__(self, cn=None, key=None, key_path=None, key_passwd=b"", ca_path=None, ca_key_path=None, ca_key_passwd=b""):
-        self.crt_key = key # a OpenSSL.crypto.Pkey() instance
+        self.crt_key = key  # a OpenSSL.crypto.Pkey() instance
         self.crt_key_path = key_path		# path to PEM key file
         self.crt_key_passwd = key_passwd 
         self.ca_path = ca_path			# path to CA cert PEM file
@@ -19,15 +26,15 @@ class CertMaker:
         # default values
         self.keytype = crypto.TYPE_RSA
         self.keylength = 2048
-        self.validsince = 0 # now
-        self.validfor = 60 * 60 * 24 * 30 # 30 days
+        self.validsince = 0  # now
+        self.validfor = 60 * 60 * 24 * 30  # 30 days
         self.hashalg = "sha1"
 
         self.kt = None
 
         # make subject attribs available (mainly for argparse)
         self.CN = cn  # mandatory
-        self.C = self.ST = self.L =  self.O = self.OU = self.emailAddress = None
+        self.C = self.ST = self.L = self.O = self.OU = self.emailAddress = None
 
         # shortcut fro commandline
         self.email = None
@@ -37,8 +44,7 @@ class CertMaker:
         self.crl = None
         self.isCA = False
 
-
-        #self.cert = None
+        # self.cert = None
         self.cert = crypto.X509()
         # TODO: we always set this to version 3, cause we use extensions. May be we should make edge cases possible
         # like having version 2 but including v3 extensions?
@@ -48,11 +54,10 @@ class CertMaker:
         # see https://www.openssl.org/docs/manmaster/man5/x509v3_config.html#STANDARD-EXTENSIONS for more std extensions
         self.cert_extensions = []
 
-
     # TODO: certificate faking:
     # these values and eventually generate new cert out of these
     def fakecert(certificate):
-    #   only set new key and re-sign, then return the new fakecert
+        # only set new key and re-sign, then return the new fakecert
         pass
 
     # TODO: copy a cert and modify some values
@@ -61,12 +66,12 @@ class CertMaker:
 
     # deprecated and not used anymore
     def get_serial(self):
-        hash = hashlib.sha1()
-        #val = self.subject_dict["CN"] + "_" + str(time.time())
+        hashfunc = hashlib.sha1()
+        # val = self.subject_dict["CN"] + "_" + str(time.time())
         val = self.cert.get_subject().CN + "_" + str(time.time())
-        hash.update(val.encode("utf-8"))
-        #print(type(hash.digest()))
-        return int.from_bytes(hash.digest(), byteorder="big")
+        hashfunc.update(val.encode("utf-8"))
+        # print(type(hashfunc.digest()))
+        return int.from_bytes(hashfunc.digest(), byteorder="big")
 
     def get_rand_serial(self):
         return int(uuid4())
@@ -94,9 +99,8 @@ class CertMaker:
     # subject and issuer are optional X509 certificate objects (i.e., required for authorityKeyIdentifier extensions)
     def set_extension(self, ext_name, ext_val, critical, subject=None, issuer=None):
         if type(critical) != bool:
-            critical = critical.lower() in [b"true",b"1",b"yes"]
+            critical = critical.lower() in [b"true", b"1", b"yes"]
         self.cert_extensions.append(crypto.X509Extension(ext_name, critical, ext_val, subject, issuer))
-
 
     def set_subject(self, x509_subject):
         # overrides cn and all subject_dict values, e.g., to copy all values from an existing x509 subject
@@ -104,11 +108,11 @@ class CertMaker:
 
     # applying prepared attributes and generate signature for toBeSignedCert
     def make_cert(self):
-        #cert = crypto.X509()
+        # cert = crypto.X509()
         cert = self.cert
 
-        self.subject_dict = {"CN":self.CN, "C":self.C, "ST":self.ST, "L":self.L, "O":self.O, "OU":self.OU,
-                             "emailAddress":self.email}
+        self.subject_dict = {"CN": self.CN, "C": self.C, "ST": self.ST, "L": self.L, "O": self.O, "OU": self.OU,
+                             "emailAddress": self.email}
 
         if self.subject_dict is not None:
             for key, val in self.subject_dict.items():
@@ -123,7 +127,8 @@ class CertMaker:
 
         if self.crt_key is None:
             if self.crt_key_path is not None:
-                self.crt_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.crt_key_path).read(), self.crt_key_passwd)
+                self.crt_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.crt_key_path).read(),
+                                                      self.crt_key_passwd)
             else:
                 self.crt_key = self.gen_key()
 
@@ -144,19 +149,12 @@ class CertMaker:
 
         cert.set_issuer(ca_crt.get_subject())
 
-        # if self.ext is not None:
-        #     for ex in self.ext:
-        #         # each ex in self.ext contain extension name, value and critical flag
-        #         print(self.ext[0])
-        #         self.ext[2] = bool(self.ext[2])
-        #         self.set_extension(*self.ext, cert, ca_crt)
-
         cert.add_extensions(self.cert_extensions)
 
         cert.sign(ca_key, self.hashalg)
         
-        #TODO: add method to change any attribute like use invalid pubkey, set a different subjet etc, all actions that invalidate these
-        # certificates signature but should still be possible
+        # TODO: add method to change any attribute; e.g, to use invalid pubkey, set a different subjet etc. That would
+        # of course invalidate the certificate's signature but should still be possible
         self.cert = cert
 
     def store_cert_and_key(self, path=None):
@@ -174,9 +172,10 @@ class CertMaker:
             domain_cert.write(crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert).decode('utf-8'))
         print("Stored cert as: ", cert_path)
 
-    def get_cert_and_key(self, asPEM):
-        if asPEM:
-            return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert), crypto.dump_privatekey(crypto.FILETYPE_PEM, self.crt_key)
+    def get_cert_and_key(self, as_PEM):
+        if as_PEM:
+            return crypto.dump_certificate(crypto.FILETYPE_PEM, self.cert), \
+                   crypto.dump_privatekey(crypto.FILETYPE_PEM, self.crt_key)
 
         return self.cert, self.crt_key
 
@@ -199,12 +198,12 @@ class CertMaker:
 # ... 
 # 1708
 
-
     # needless, delete...
     def make_ext(name, value, critical):
         pass
 
 if __name__ == '__main__':
+
 
     parser = argparse.ArgumentParser()
     # the "cert" argument is only used to split the commandline into separate cert configs
@@ -212,7 +211,7 @@ if __name__ == '__main__':
     parser.add_argument("-CN", type=str, help="each certificate needs a commonName (e.g., the domain or hostname)", required=True)
     for code in ["C", "ST", "L", "O", "OU", "email"]:
         parser.add_argument("-" + code, type=str, help="subject value as used in OpenSSL; special chars need escaping "
-                                                     "to prevent your shell from gobbling them up")
+                                                       "to prevent your shell from gobbling them up")
 
     parser.add_argument("-ca_path", type=argparse.FileType('r'), help="path to the issuer certificate in PEM format. "
                                                                       "The preceding cert will be used as Issuer if ca_path is not given. "
@@ -238,18 +237,18 @@ if __name__ == '__main__':
     parser.add_argument("-validsince", type=int, help="number of seconds since when this cert has been valid")
     parser.add_argument("-validfor", type=int, help="number of seconds until this certificate shall expire")
 
-    parser.add_argument("-kt", choices=["RSA","DSA"], help="set the keytype to use. default is RSA", default="RSA")
+    parser.add_argument("-kt", choices=["RSA", "DSA"], help="set the keytype to use. default is RSA", default="RSA")
     parser.add_argument("-keylength", type=int, help="keylength in bits")
     parser.add_argument("-serial", type=int, help="the serial number for this cert")
 
     cmdline = sys.argv[1::]
     # debugging
-    #print(repr(cmdline))
-    #cmdline = ['cert', '-CN', 'foo bar subj', 'cert', '-CN', 'bazn\'">><h\\oh', '-ext', 'basicConstraints', 'CA:FALSE', 'True', '-ext', 'authorityInfoAccess', 'OCSP;URI:http://ocsp.my.host/', 'False']
+    # print(repr(cmdline))
+    # cmdline = ['cert', '-CN', 'foo bar subj', 'cert', '-CN', 'bazn\'">><h\\oh', '-ext', 'basicConstraints', 'CA:FALSE', 'True', '-ext', 'authorityInfoAccess', 'OCSP;URI:http://ocsp.my.host/', 'False']
 
     # split cmdline to have lists of arguments for each certificate
     certconfigs = [list(y) for x,y in itertools.groupby(cmdline, lambda z: z == "cert") if not x]
-    #print(repr(certconfigs))
+    # print(repr(certconfigs))
 
     # prepare certmaker objects for each config parsed from the cmdline
     certs = [CertMaker() for config in certconfigs]
@@ -274,7 +273,7 @@ if __name__ == '__main__':
 
 
         current.make_cert()
-        #current.get_cert_and_key(True)
+        # current.get_cert_and_key(True)
 
     # dump PEM cert and key, leaf cert first
     for c in certs[::-1]:
