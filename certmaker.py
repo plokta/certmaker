@@ -95,10 +95,6 @@ class CertMaker:
         key.generate_key(self.keytype, self.keylength)
         return key
 
-    # TODO: add some default extensions (like BasicConstraints CA:False, SANS, ...) or
-    # at least simple workarounds to add these
-    # example:
-    # cm.set_extension(b'basicConstraints', b'CA:TRUE', True)
     # subject and issuer are optional X509 certificate objects (i.e., required for authorityKeyIdentifier extensions)
     def set_extension(self, ext_name, ext_val, critical, subject=None, issuer=None):
         if type(critical) != bool:
@@ -202,7 +198,6 @@ class CertMaker:
 # ... 
 # 1708
 
-
 def str_to_bytes(arg):
     # attempted to inject NUL bytes failed due to the underlying openssl lib cutting strings on NUL.
     # perhaps one could edit the ASN1 structure of the certificate before signing to generate such certs?
@@ -212,13 +207,24 @@ def str_to_bytes(arg):
     #arg = arg.replace('\\x00', '\0')
     return bytes(arg, 'ascii')
 
-if __name__ == '__main__':
-
-    # argument parsing is a mess currently to get a somewhat meaningful helpmessage. apperently, argparse
+def make_parser():
+    # argument parsing is a mess currently to get a somewhat meaningful helpmessage. apparently, argparse
     # is not the best fit for parsing a (mandatory) subcommand that can occur multiple times. consider to use click or just
     # add a manual help message in a future version.
-    main_parser = argparse.ArgumentParser()
-    subparsers = main_parser.add_subparsers(help="'cert' is the only (mandatory) subcommand and can occure multiple times. Use 'cert -h' to show options; ",)
+
+    epilog_string ="""Example: Generate intermediate CA (issuer read from file) and a leaf cert with several extensions:
+
+./certmaker.py cert -CN "Test-CA Subj" -isCA -ca_path ./ca-crt.pem -ca_key_path ./ca-key.pem \ 
+    cert -CN "baz subject" -keylength 512 -email mail@example.com -OU OrgUnit \ 
+      -crl https://foo.bar.baz/CRL \ 
+      -ext authorityInfoAccess OCSP\;URI:http://ocsp.my.host/ False \ 
+      -ext  extendedKeyUsage codeSigning True \ 
+      -ext 1.2.3333.44 'ASN1:UTF8String:Random content for custom extension with OID 1.2.3333.44' True
+"""
+
+    main_parser = argparse.ArgumentParser(epilog=epilog_string,formatter_class=argparse.RawDescriptionHelpFormatter,)
+    subparsers = main_parser.add_subparsers(
+        help="'cert' is the only (mandatory) subcommand and can occure multiple times. Use 'cert -h' to show options; ", )
 
     # we define the "cert" keyword as subcommand, to get an appropriate help/usage message - the cert keyword is always required
     # the "cert" subcommand is only used to split the commandline into separate cert configs
@@ -230,40 +236,47 @@ if __name__ == '__main__':
     optional = parser._action_groups.pop()  # Edited this line
     required = parser.add_argument_group('required arguments')
 
-    required.add_argument("-CN", type=str_to_bytes, help="each certificate needs a commonName (e.g., the domain or hostname). "
-                                              "special chars need to be escaped otherwise your shell eats them up.", required=True)
+    required.add_argument("-CN", type=str_to_bytes,
+                          help="each certificate needs a commonName (e.g., the domain or hostname). "
+                               "special chars need to be escaped otherwise your shell eats them up.", required=True)
 
     for code in ["C", "ST", "L", "O", "OU", "email"]:
-        optional.add_argument("-" + code, type=str_to_bytes, help="subject attribute as used in OpenSSL; escape special chars!")
+        optional.add_argument("-" + code, type=str_to_bytes,
+                              help="subject attribute as used in OpenSSL; escape special chars!")
 
     optional.add_argument("-ca_path", type=argparse.FileType('r'), help="path to the issuer certificate in PEM format. "
-                                                                      "The preceding cert will be used as Issuer if ca_path is not given. "
-                                                                      "The first cert on cmdline will be self-signed, if no ca_path is given.")
-    optional.add_argument("-ca_key_path", type=argparse.FileType('r'), help="path to the issuer key in PEM format, required if ca_path is given.")
+                                                                        "The preceding cert will be used as Issuer if ca_path is not given. "
+                                                                        "The first cert on cmdline will be self-signed, if no ca_path is given.")
+    optional.add_argument("-ca_key_path", type=argparse.FileType('r'),
+                          help="path to the issuer key in PEM format, required if ca_path is given.")
     optional.add_argument("-ca_key_passwd", type=str, help="the keyfile password, if encrypted")
 
-    optional.add_argument("-hashalg", type=str, help="digest method to use for signing the tbs cert, e.g. 'sha1', 'sha256', "
-                                                   "'md5'. Default is sha1", default="sha1")
+    optional.add_argument("-hashalg", type=str,
+                          help="digest method to use for signing the tbs cert, e.g. 'sha1', 'sha256', "
+                               "'md5'. Default is sha1", default="sha1")
 
-    optional.add_argument("-crt_key_path", type=argparse.FileType('r'), help="path to PEM formatted key to use for this cert")
+    optional.add_argument("-crt_key_path", type=argparse.FileType('r'),
+                          help="path to PEM formatted key to use for this cert")
     optional.add_argument("-crt_key_passwd", type=str, help="the keyfile password, if encrypted")
 
     # extensions
-    optional.add_argument("-ext", action='append', type=str, nargs=3, metavar=("extNAME", "extVALUE", "CRIT"),default=[],
-                        help="to add an x509v3 Extension such as 'subjectAltNam' enter the name, "
-                            "value, and critical-flag separated by space like this: "
-                            "'-ext subjectAltName DNS:http://example.com\;IP:1.2.3.4 False' "
-                            "Only 'False' and 'True' are permitted for critical-flag."
-                            " See https://www.openssl.org/docs/manmaster/man5/x509v3_config.html#STANDARD-EXTENSIONS"
-                            " for available syntax")
+    optional.add_argument("-ext", action='append', type=str, nargs=3, metavar=("extNAME", "extVALUE", "CRIT"),
+                          default=[],
+                          help="to add an x509v3 Extension such as 'subjectAltNam' enter the name, "
+                               "value, and critical-flag separated by space like this: "
+                               "'-ext subjectAltName DNS:http://example.com\;IP:1.2.3.4 False' "
+                               "Only 'False' and 'True' are permitted for critical-flag."
+                               " See https://www.openssl.org/docs/manmaster/man5/x509v3_config.html#STANDARD-EXTENSIONS"
+                               " for available syntax")
     # shortcuts for frequent extensions
     optional.add_argument("-crl", type=str, help="the URL of the CRL distribution point")
-    optional.add_argument("-isCA", action='store_true', default=False, help="if set, the critical extension 'basicConstraints:CA:TRUE' is added.")
-#    parser.add_argument("-aia", type=str, help="authority information access, see https://www.openssl.org/docs/manmaster/man5/x509v3_config.html#STANDARD-EXTENSIONS for syntax")
+    optional.add_argument("-isCA", action='store_true',
+                          help="if set, the critical extension 'basicConstraints:CA:TRUE' is added.")
+    #    parser.add_argument("-aia", type=str, help="authority information access, see https://www.openssl.org/docs/manmaster/man5/x509v3_config.html#STANDARD-EXTENSIONS for syntax")
     optional.add_argument("-validsince", type=int, help="number of seconds since when this cert has been valid. "
-                                                      "Default is 0 (i.e., cert is valid from 'now' on)")
+                                                        "Default is 0 (i.e., cert is valid from 'now' on)")
     optional.add_argument("-validfor", type=int, help="number of seconds until this certificate shall expire. "
-                                                    "Default is 2592000 = 30days")
+                                                      "Default is 2592000 = 30days")
 
     optional.add_argument("-kt", choices=["RSA", "DSA"], help="set the keytype to use. default is RSA", default="RSA")
     optional.add_argument("-keylength", type=int, help="keylength in bits, default is 2048", default=2048)
@@ -271,18 +284,17 @@ if __name__ == '__main__':
 
     parser._action_groups.append(optional)
 
+    return main_parser
+
+
+if __name__ == '__main__':
+
     cmdline = sys.argv[1:]
 
+    parser = make_parser()
     if len(cmdline) == 0 or cmdline[0] != "cert":
-        main_parser.print_help()
-        main_parser.exit()
-
-    # debugging
-    # print(repr(cmdline))
-    #cmdline = ['cert', '-CN', 'foo bar subj', 'cert', '-CN', 'bazn\'">><h\\oh', '-ext', 'basicConstraints', 'CA:FALSE', 'True', '-ext', 'authorityInfoAccess', 'OCSP;URI:http://ocsp.my.host/', 'False']
-
-    # split cmdline to have lists of arguments for each certificate; removes the 'cert' keywords
-    #certconfigs = [list(y) for x,y in itertools.groupby(cmdline, lambda z: z == "cert") if not x]
+        parser.print_help()
+        parser.exit()
 
     # split cmdline, keep the "cert" keyword as trigger for the subcommand parser
     certconfigs = []
@@ -296,16 +308,14 @@ if __name__ == '__main__':
 
     # generate the actual certificates
     for i in range(len(certs)):
+        args = parser.parse_args(certconfigs[i])
         # subparser such as 'parser.parse_args(certconfigs[i], certs[i])' would set all args that are not provided
         # on cli to "None". Therefore we can not use certs[i] as the parser-namespace, because we want to re-use the
         # defaults set in the CertMaker class (for API usage).
         # We work around this using setattr:
-        args = main_parser.parse_args(certconfigs[i])
-        #print(vars(args))
         for k,v in vars(args).items():
             if v is not None:
                 setattr(certs[i], k, v)
-        #main_parser.parse_args(certconfigs[i], certs[i])
         #print(vars(certs[i]))
 
         current = certs[i]
@@ -328,11 +338,11 @@ if __name__ == '__main__':
         current.make_cert()
         # current.get_cert_and_key(True)
 
+        # get a new parser everytime to prevent collisions when using action='append' as in the -ext option
+        parser = make_parser()
+
     # dump all PEM certs and keys, leaf cert first
     for c in certs[::-1]:
         cc, k = c.get_cert_and_key(True)
         print(cc.decode("UTF-8"))
         print(k.decode("UTF-8"))
-
-        # Usage example including one CA cert and several extensions
-        # ./certmaker.py cert -CN "foo bar subj" -isCA cert -CN bazn\'\"\>\>\<h\\oh -ext authorityInfoAccess OCSP\;URI:http://ocsp.my.host/ False -keylength 512 -crl https://foo.bar.baz/CRL -email sergio.ramos@caramba.ca -OU NDS -ST NRW -ext  extendedKeyUsage codeSigning,1.2.3.4 True -ext  1.2.3.4.5.6 DER:01:02:03:04 True
