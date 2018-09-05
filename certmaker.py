@@ -81,8 +81,10 @@ class CertMaker:
         self.certificate.set_serial_number(int_serial)
 
     def get_ca(self):
-        ca_crt = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.ca_path).read())
-        ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.ca_key_path).read(), self.ca_key_passwd)
+        #ca_crt = crypto.load_certificate(crypto.FILETYPE_PEM, open(self.ca_path).read())
+        #ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.ca_key_path).read(), self.ca_key_passwd)
+        ca_crt = crypto.load_certificate(crypto.FILETYPE_PEM, self.ca_path.read())
+        ca_key = crypto.load_privatekey(crypto.FILETYPE_PEM, self.ca_key_path.read(), self.ca_key_passwd)
         return ca_crt, ca_key
 
     def gen_key(self):
@@ -128,7 +130,7 @@ class CertMaker:
 
         if self.crt_key is None:
             if self.crt_key_path is not None:
-                self.crt_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(self.crt_key_path).read(),
+                self.crt_key = crypto.load_privatekey(crypto.FILETYPE_PEM, self.crt_key_path.read(),
                                                       self.crt_key_passwd)
             else:
                 self.crt_key = self.gen_key()
