@@ -333,4 +333,4 @@ if __name__ == '__main__':
         print(k.decode("UTF-8"))
 
         # Usage example including one CA cert and several extensions
-        # ./certmaker.py cert -CN "foo bar subj" -isCA cert -CN bazn\'\"\>\>\<h\\oh -ext authorityInfoAccess OCSP\;URI:http://ocsp.my.host/ FalseTrue -keylength 512 -crl https://foo.bar.baz/CRL -email sergio.ramos@caramba.ca -OU NDS -ST NRW -ext  extendedKeyUsage codeSigning,1.2.3.4 True -ext  1.2.3.4.5.6 DER:01:02:03:04 True
+        # ./certmaker.py cert -CN "foo bar subj" -isCA cert -CN bazn\'\"\>\>\<h\\oh -ext authorityInfoAccess OCSP\;URI:http://ocsp.my.host/ False -keylength 512 -crl https://foo.bar.baz/CRL -email sergio.ramos@caramba.ca -OU NDS -ST NRW -ext  extendedKeyUsage codeSigning,1.2.3.4 True -ext  1.2.3.4.5.6 DER:01:02:03:04 True
