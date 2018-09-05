@@ -3,9 +3,8 @@
 A lightweight wrapper around `pyOpenSSL` to facilitate certificate generation from the commandline.
 
 ## Certificates and Certificate-Chains (not only) for Adversarial Testing
-Quickly generating a highly customized certificate chain is not really an every-day task. However, if one needs to do so, the usually available tools are not exactly fit to the purpose. As an example, imagine that a specific, custom extension needs to be added to the third imtermediate CA cert. Or, perhaps the `Organisation` field of a certificate's subject shall be tested as XSS (or SQL-Injection) vector against some service. This may require lots of attempts and thus generated certificates until the right attack vector has been found.
-
-Of course one can fiddle around with the OpenSSL CLI tool to create such certificates but that tends to be, well, fiddly. This is where **CertMaker** comes to the rescue. Let's stick to the last example of an XSS in the `Organisation` field. Using `CertMaker`'s CLI, one can simply run:
+Quickly generating a highly customized certificate chain is not really an every-day task. However, if one needs to do so, common tools are not exactly fit for the purpose. 
+Of course one can fiddle around with the OpenSSL CLI tool to create special certificates but that tends to be, well, fiddly. This is where **CertMaker** comes to the rescue. As an example, if you want to test for an XSS vuln in the `Organisation` field (as reflected by some web-based certificate viewer). Using `CertMaker`'s CLI, one can simply run:
 
 ```
 ./certmaker.py  cert -CN ''TestSubjects Common Name' -O 'some<script>alert(1)</script>XSS vector'
@@ -55,7 +54,7 @@ uMqL7j6yqi45fUH/1jo=
 
 ## Installation
 
-`CertMaker` is aPython3 script which uses`pyOpenSSL` internally. Other than that, only standardlibrary modules are used. To install `pyOpenSSL` on a Debian based distribution run
+`CertMaker` is a Python3 script which uses`pyOpenSSL` internally. Other than that, only standardlibrary modules are used. To install `pyOpenSSL` on a Debian based distribution run
 
 ```
 sudo apt-get install python3-openssl
@@ -67,7 +66,7 @@ Alternatively, you may install `pip3` using `apt-get install python3-pip` and ru
 ## Usage
 As already shown above, simply running `./certmaker.py cert -CN "Test Subject"` will generate a self signed certificate where subject = issuer = "Test Subject". Default values are applied to all other required values such as key (random RSA Key with 2048 bit length is generated automatically), validity period, serial number (random), and so on...
 
-Calling for help with `./certmaker -h` will only hint at the subcommand `cert`
+Calling for help with `./certmaker -h` will only hint at the subcommand `cert` and provide a rather complex example:
 
 ```
 ./certmaker.py -h
@@ -85,9 +84,18 @@ positional arguments:
 optional arguments:
   -h, --help  show this help message and exit
 
+Example: Generate intermediate CA (issuer read from file) and a leaf cert with several extensions:
+
+./certmaker.py cert -CN "Test-CA Subj" -isCA -ca_path ./ca-crt.pem -ca_key_path ./ca-key.pem \ 
+    cert -CN "baz subject" -keylength 512 -email mail@example.com -OU OrgUnit \ 
+      -crl https://foo.bar.baz/CRL \ 
+      -ext authorityInfoAccess OCSP\;URI:http://ocsp.my.host/ False \ 
+      -ext  extendedKeyUsage codeSigning True \ 
+      -ext 1.2.3333.44 'ASN1:UTF8String:Random content for custom extension with OID 1.2.3333.44' True
+
 ```
 
-So what you really need is `./certmaker.py cert -h`, which will display all options of the `cert` command:
+To get information about `cert` command's options, run `./certmaker.py cert -h`:
 
 ```
 ./certmaker.py cert -h
@@ -158,6 +166,7 @@ optional arguments:
                         number
 
 ```
+
 ### X509v3 Extensions
 
 Use the `-ext` option with three arguments to add an extension field to the generated certificate. The `-ext` option takes as positional arguments the
