@@ -33,6 +33,8 @@ class CertMaker:
         self.ca_key_passwd = ca_key_passwd
         self.ca_crt = None
         self.ca_key = None
+        self.certout = None
+        self.keyout = None
 
         # default values
         self.keytype = DEF_KEYTYPE
@@ -254,15 +256,15 @@ def file_exists(filepath):
     return os.path.isfile(os.path.realpath(filepath))
 
 
-def write_to_file(out, targetfilepath):
+def write_to_file(out, targetfilepath, append=False):
     rp = os.path.realpath(targetfilepath)
-    if file_exists(targetfilepath):
+    if file_exists(rp) and append is False:
         os.rename(rp, rp + ".bak")
-        print("[*] - Moved existing file {} to {}".format(rp, rp + ".bak"))
-    with open(rp, "w") as f:
+    mode = "a" if append else "w"
+    with open(rp, mode) as f:
         f.write(out)
-    print("[+] - Created {}".format(rp))
 
+    return rp
 
 def str_to_bytes(arg):
 
@@ -357,6 +359,8 @@ def make_parser():
     optional.add_argument("-kt", choices=["RSA", "DSA"], help="set the keytype to use. default is RSA", default="RSA")
     optional.add_argument("-keylength", type=int, help="keylength in bits, default is 2048", default=2048)
     optional.add_argument("-serial", type=int, help="the serial number for this cert. default is a random number")
+    optional.add_argument("-certout", type=str, help="where to store this certificate", metavar="FILENAME", default=None)
+    optional.add_argument("-keyout", type=str, help="where to store this cert's private key", metavar="FILENAME", default=None)
 
     parser._action_groups.append(optional)
 
@@ -419,11 +423,28 @@ if __name__ == '__main__':
         current.make_cert()
         # current.get_cert_and_key(True)
 
+        # file output if set for current cert
+        cc, k = current.get_cert_and_key(True)
+        if args.certout is not None:
+            current.certout = write_to_file(cc.decode("UTF-8"), args.certout)
+            # append key to certfile if no separate keyout is given
+            if args.keyout is None:
+                current.keyout = write_to_file(k.decode("UTF-8"), args.certout, append=True)
+        if args.keyout is not None:
+            current.keyout = write_to_file(k.decode("UTF-8"), args.keyout)
+
         # get a new parser for every cert command to prevent collisions when using action='append' as in the -ext option
         parser = make_parser()
 
     # dump all PEM certs and keys, leaf cert first
     for c in certs[::-1]:
+
         cc, k = c.get_cert_and_key(True)
-        print(cc.decode("UTF-8"))
-        print(k.decode("UTF-8"))
+        if c.certout is not None:
+            print("[+] Stored a cert in {}".format(c.certout))
+        else:
+            print(cc.decode("UTF-8"))
+        if c.keyout is not None:
+            print("[+] Stored a key in {}".format(c.keyout))
+        else:
+            print(k.decode("UTF-8"))
