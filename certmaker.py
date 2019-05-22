@@ -142,6 +142,9 @@ class CertMaker:
             # make a copy to ensure that all custom fields are kept
             self.certificate = crypto.load_certificate(crypto.FILETYPE_PEM, self.copy.read())
             cert = self.certificate
+            # override validity period if provided 
+            if not self.validfor == DEF_VALID_FOR:
+                cert.gmtime_adj_notAfter(self.validfor)
             # adjusting extensions becomes weird; first, we need to store the extensions from the original cert
             original_exts = self.extract_extensions()
 
